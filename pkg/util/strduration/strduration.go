@@ -2,6 +2,8 @@ package strduration
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -26,11 +28,25 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 
 	// if the value is a JSON number, parse it as a time.Duration
 	if len(b) > 0 && (b[0] >= '0' && b[0] <= '9' || b[0] == '-') {
-		var n float64
-		if err := json.Unmarshal(b, &n); err == nil {
-			*d = Duration(time.Duration(n))
+		// Preserve integer nanoseconds without rounding through float64.
+		if !strings.ContainsAny(string(b), ".eE") {
+			var n int64
+			if err := json.Unmarshal(b, &n); err != nil {
+				return err
+			}
+			*d = Duration(n)
 			return nil
 		}
+		var n float64
+		if err := json.Unmarshal(b, &n); err != nil {
+			return err
+		}
+		// The float64 representation of MaxInt64 rounds up to 1<<63.
+		if n < math.MinInt64 || n >= -float64(math.MinInt64) {
+			return fmt.Errorf("duration out of range: %s", b)
+		}
+		*d = Duration(time.Duration(n))
+		return nil
 	}
 
 	var s string

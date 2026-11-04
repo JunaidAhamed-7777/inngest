@@ -96,6 +96,16 @@ func TestStringDurationUnmarshalJSONNumber(t *testing.T) {
 			expected: Duration(-5 * time.Second),
 		},
 		{
+			name:     "fractional nanoseconds retain truncation",
+			input:    `1.9`,
+			expected: Duration(1),
+		},
+		{
+			name:     "negative fractional nanoseconds retain truncation",
+			input:    `-1.9`,
+			expected: Duration(-1),
+		},
+		{
 			name:     "zero",
 			input:    `0`,
 			expected: Duration(0),
@@ -127,4 +137,32 @@ func TestStringDurationUnmarshalJSONErrors(t *testing.T) {
 	err = json.Unmarshal([]byte(`null`), &sd)
 	require.NoError(t, err)
 	require.Equal(t, Duration(0), sd)
+}
+
+func TestStringDurationUnmarshalJSONNumberBounds(t *testing.T) {
+	for _, input := range []string{"9223372036854775808", "-9223372036854775809", "1e20", "-1e20", "9223372036854775808.0", "-9223372036854777856.0"} {
+		t.Run(input, func(t *testing.T) {
+			sd := Duration(123)
+			err := json.Unmarshal([]byte(input), &sd)
+			require.Error(t, err)
+			require.Equal(t, Duration(123), sd)
+		})
+	}
+}
+
+func TestStringDurationUnmarshalJSONIntegerPrecision(t *testing.T) {
+	for _, tc := range []struct {
+		input string
+		want  Duration
+	}{
+		{"9007199254740993", Duration(9007199254740993)},
+		{"9223372036854775807", Duration(9223372036854775807)},
+		{"-9223372036854775808", Duration(-9223372036854775808)},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			var sd Duration
+			require.NoError(t, json.Unmarshal([]byte(tc.input), &sd))
+			require.Equal(t, tc.want, sd)
+		})
+	}
 }
